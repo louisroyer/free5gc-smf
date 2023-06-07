@@ -281,6 +281,9 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 				for _, eIP := range iface.IPv4EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
+				for _, eIP := range iface.IPv6EndPointAddresses {
+					endpoints = append(endpoints, eIP.String())
+				}
 				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
 					InterfaceType:    models.UpInterfaceType_N3,
 					Endpoints:        endpoints,
@@ -295,6 +298,9 @@ func (upi *UserPlaneInformation) UpNodesToConfiguration() map[string]*factory.UP
 					endpoints = append(endpoints, iface.EndpointFQDN)
 				}
 				for _, eIP := range iface.IPv4EndPointAddresses {
+					endpoints = append(endpoints, eIP.String())
+				}
+				for _, eIP := range iface.IPv6EndPointAddresses {
 					endpoints = append(endpoints, eIP.String())
 				}
 				FNxList = append(FNxList, &factory.InterfaceUpfInfoItem{
