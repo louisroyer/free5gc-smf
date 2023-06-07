@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -503,16 +504,33 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				return
 			}
 
-			if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+			// PDUSessionType is for Inner IP Header, not for Outer IP Header
+
+			if upIP, isv4, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 				logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
 				return
 			} else {
 				ULPDR.PDI = PDI{
 					SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceAccess},
 					LocalFTeid: &pfcpType.FTEID{
-						V4:          true,
-						Ipv4Address: upIP,
-						Teid:        curULTunnel.TEID,
+						// FIXME: selection of V4 or V6 should be based on upIP being v4/v6
+						V6: !isv4,
+						V4: isv4,
+						Ipv4Address: func(v4 bool, ip net.IP) net.IP {
+							if v4 {
+								return ip
+							} else {
+								return net.ParseIP("0.0.0.0")
+							}
+						}(isv4, upIP),
+						Ipv6Address: func(v6 bool, ip net.IP) net.IP {
+							if v6 {
+								return ip
+							} else {
+								return net.ParseIP("::")
+							}
+						}(!isv4, upIP),
+						Teid: curULTunnel.TEID,
 					},
 					NetworkInstance: &pfcpType.NetworkInstance{
 						NetworkInstance: smContext.Dnn,
@@ -556,14 +574,33 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				nextULTunnel := nextULDest.UpLinkTunnel
 				iface = nextULTunnel.DestEndPoint.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
-				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+				if upIP, isv4, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
 					return
 				} else {
 					ULFAR.ForwardingParameters.OuterHeaderCreation = &pfcpType.OuterHeaderCreation{
-						OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-						Ipv4Address:                    upIP,
-						Teid:                           nextULTunnel.TEID,
+						OuterHeaderCreationDescription: func(v4 bool) uint16 {
+							if v4 {
+								return pfcpType.OuterHeaderCreationGtpUUdpIpv4
+							} else {
+								return pfcpType.OuterHeaderCreationGtpUUdpIpv6
+							}
+						}(isv4),
+						Ipv4Address: func(v4 bool, ip net.IP) net.IP {
+							if v4 {
+								return ip
+							} else {
+								return net.ParseIP("0.0.0.0")
+							}
+						}(isv4, upIP),
+						Ipv6Address: func(v6 bool, ip net.IP) net.IP {
+							if v6 {
+								return ip
+							} else {
+								return net.ParseIP("::")
+							}
+						}(!isv4, upIP),
+						Teid: nextULTunnel.TEID,
 					}
 				}
 			}
@@ -606,16 +643,30 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 				}
 
 				iface = DLDestUPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
-				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+				if upIP, isv4, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
 					return
 				} else {
 					DLPDR.PDI = PDI{
 						SourceInterface: pfcpType.SourceInterface{InterfaceValue: pfcpType.SourceInterfaceCore},
 						LocalFTeid: &pfcpType.FTEID{
-							V4:          true,
-							Ipv4Address: upIP,
-							Teid:        curDLTunnel.TEID,
+							V6: !isv4,
+							V4: isv4,
+							Ipv4Address: func(v4 bool, ip net.IP) net.IP {
+								if v4 {
+									return ip
+								} else {
+									return net.ParseIP("0.0.0.0")
+								}
+							}(isv4, upIP),
+							Ipv6Address: func(v6 bool, ip net.IP) net.IP {
+								if v6 {
+									return ip
+								} else {
+									return net.ParseIP("::")
+								}
+							}(!isv4, upIP),
+							Teid: curDLTunnel.TEID,
 						},
 
 						// TODO: Should Uncomment this after FR5GC-1029 is solved
@@ -645,16 +696,35 @@ func (dataPath *DataPath) ActivateTunnelAndPDR(smContext *SMContext, precedence 
 
 				iface = nextDLDest.UPF.GetInterface(models.UpInterfaceType_N9, smContext.Dnn)
 
-				if upIP, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
+				if upIP, isv4, err := iface.IP(smContext.SelectedPDUSessionType); err != nil {
 					logger.CtxLog.Errorln("ActivateTunnelAndPDR failed", err)
 					return
 				} else {
 					DLFAR.ForwardingParameters = &ForwardingParameters{
 						DestinationInterface: pfcpType.DestinationInterface{InterfaceValue: pfcpType.DestinationInterfaceAccess},
 						OuterHeaderCreation: &pfcpType.OuterHeaderCreation{
-							OuterHeaderCreationDescription: pfcpType.OuterHeaderCreationGtpUUdpIpv4,
-							Ipv4Address:                    upIP,
-							Teid:                           nextDLTunnel.TEID,
+							OuterHeaderCreationDescription: func(v4 bool) uint16 {
+								if v4 {
+									return pfcpType.OuterHeaderCreationGtpUUdpIpv4
+								} else {
+									return pfcpType.OuterHeaderCreationGtpUUdpIpv6
+								}
+							}(isv4),
+							Ipv4Address: func(v4 bool, ip net.IP) net.IP {
+								if v4 {
+									return ip
+								} else {
+									return net.ParseIP("0.0.0.0")
+								}
+							}(isv4, upIP),
+							Ipv6Address: func(v6 bool, ip net.IP) net.IP {
+								if v6 {
+									return ip
+								} else {
+									return net.ParseIP("::")
+								}
+							}(!isv4, upIP),
+							Teid: nextDLTunnel.TEID,
 						},
 					}
 				}

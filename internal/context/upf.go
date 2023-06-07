@@ -137,37 +137,39 @@ func NewUPFInterfaceInfo(i *factory.InterfaceUpfInfoItem) *UPFInterfaceInfo {
 
 // *** add unit test ***//
 // IP returns the IP of the user plane IP information of the pduSessType
-func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, error) {
-	if (pduSessType == nasMessage.PDUSessionTypeIPv4 ||
-		pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv4EndPointAddresses) != 0 {
-		return i.IPv4EndPointAddresses[0], nil
+// FIXME: there is no reason to prefer an outer IP matching the pduSessionType
+// pduSessionType is only for the inner IP (= the PDU),
+// we should check the UPF pool matches the pduSessionType instead
+func (i *UPFInterfaceInfo) IP(pduSessType uint8) (net.IP, bool, error) {
+	if len(i.IPv4EndPointAddresses) != 0 {
+		return i.IPv4EndPointAddresses[0], true, nil
 	}
 
-	if (pduSessType == nasMessage.PDUSessionTypeIPv6 ||
-		pduSessType == nasMessage.PDUSessionTypeIPv4IPv6) && len(i.IPv6EndPointAddresses) != 0 {
-		return i.IPv6EndPointAddresses[0], nil
+	if len(i.IPv6EndPointAddresses) != 0 {
+		return i.IPv6EndPointAddresses[0], false, nil
 	}
 
+	// FIXME: this should not depend at all of pduSessionType
 	if i.EndpointFQDN != "" {
 		if resolvedAddr, err := net.ResolveIPAddr("ip", i.EndpointFQDN); err != nil {
 			logger.CtxLog.Errorf("resolve addr [%s] failed", i.EndpointFQDN)
 		} else {
 			if pduSessType == nasMessage.PDUSessionTypeIPv4 {
-				return resolvedAddr.IP.To4(), nil
+				return resolvedAddr.IP.To4(), true, nil
 			} else if pduSessType == nasMessage.PDUSessionTypeIPv6 {
-				return resolvedAddr.IP.To16(), nil
+				return resolvedAddr.IP.To16(), false, nil
 			} else {
 				v4addr := resolvedAddr.IP.To4()
 				if v4addr != nil {
-					return v4addr, nil
+					return v4addr, true, nil
 				} else {
-					return resolvedAddr.IP.To16(), nil
+					return resolvedAddr.IP.To16(), false, nil
 				}
 			}
 		}
 	}
 
-	return nil, errors.New("not matched ip address")
+	return nil, false, errors.New("not matched ip address")
 }
 
 func (upfSelectionParams *UPFSelectionParams) String() string {
